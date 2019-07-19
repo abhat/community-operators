@@ -182,7 +182,7 @@ metadata:
               {
                "name": "FederatedIngress",
                "configuration": "Enabled"
-              }
+               }
             ]
           }
         },
@@ -190,17 +190,27 @@ metadata:
           "apiVersion": "operator.kubefed.io/v1alpha1",
           "kind": "KubeFed",
           "metadata": {
-            "name": "kubefed"
+            "name": "kubefed-resource"
             },
           "spec": {
             "scope": "Namespaced"
+            }
+        },
+        {
+          "apiVersion": "operator.kubefed.io/v1alpha1",
+          "kind": "KubeFedWebHook",
+          "metadata": {
+            "name": "kubefedwebhook-resource"
+            },
+          "spec": {
+            "scope": "Cluster"
             }
         }
       ]
     capabilities: Basic Install
     categories: OpenShift Optional, Integration & Delivery
     certified: "false"
-    containerImage: quay.io/openshift/kubefed-operator:v0.1.0-rc3
+    containerImage: quay.io/anbhat/kfo:webhook
     createdAt: "2019-06-14T00:00:00Z"
     description: Gain Hybrid Cloud capabilities between your clusters with Kubernetes
       Federation.
@@ -247,7 +257,7 @@ spec:
       kind: KubeFedConfig
       name: kubefedconfigs.core.kubefed.k8s.io
       version: v1beta1
-    - description: IngressDNSRecord
+    - description: IngressDNSRecord associates one or more Kubernetes Ingress and how to access the Kubernetes Ingress resources, with a scheme for constructing Domain Name System (DNS) resource records for the Ingress.
       displayName: IngressDNSRecord 
       kind: IngressDNSRecord
       name: ingressdnsrecords.multiclusterdns.kubefed.k8s.io
@@ -257,20 +267,33 @@ spec:
       kind: PropagatedVersion
       name: propagatedversions.core.kubefed.k8s.io
       version: v1alpha1
-    - description: ReplicaSchedulingPreference
+    - description: ReplicaSchedulingPreference provides an automated mechanism of distributing and maintaining total number of replicas for deployment or replicaset based federated workloads into federated clusters.
       displayName: ReplicaSchedulingPreference
       kind: ReplicaSchedulingPreference
       name: replicaschedulingpreferences.scheduling.kubefed.k8s.io
       version: v1alpha1
-    - description: ServiceDNSRecord
+    - description: ServiceDNSRecord associates one or more Kubernetes Service resources and how to access the Service, with a scheme for constructing Domain Name System (DNS) resource records for the Service.
       displayName: ServiceDNSRecord
       kind: ServiceDNSRecord
       name: servicednsrecords.multiclusterdns.kubefed.k8s.io
       version: v1alpha1
-    - description: KubeFed
+    - description: KubeFed represents an installation of a particular version of KubeFed
       displayName: KubeFed
       kind: KubeFed
       name: kubefeds.operator.kubefed.io
+      statusDescriptors:
+      - description: The version of KubeFed installed
+        displayName: Version
+        path: version
+      version: v1alpha1
+    - description: KubeFedWebHook represents an installation of a particular version of KubeFed Webhook
+      displayName: KubeFedWebHook
+      kind: KubeFedWebHook
+      name: kubefedwebhooks.operator.kubefed.io
+      statusDescriptors:
+      - description: The version of KubeFed WebHook installed
+        displayName: Version
+        path: version
       version: v1alpha1
   description: |
     Kubernetes Federation is a tool to sync (aka "federate") a set of Kubernetes
@@ -290,15 +313,14 @@ spec:
     manually before installing a new version.
 
 
-    ## Using Federation
+    ## Using KubeFed
 
-    This deploys Federation in a namespace-scoped configuration which handles
-    the resources only in the namespace where federation is deployed. For
-    example, if you subscribe to this package in namespace `my-namespace`,
-    federation will be deployed to manage objects _only_ in `my-namespace` in
+    This deploys KubeFed in a namespace-scoped as well as in a cluster-scoped fashion.
+    For example, if you subscribe to this package in namespace `my-namespace`,
+    KubeFed will be deployed to manage objects _only_ in `my-namespace` in
     the host cluster and target clusters.
 
-    After installing Federation instance, you will use the `kubefedctl` command
+    After installing KubeFed instance, you will use the `kubefedctl` command
     line tool to do two types of configuration:
       
     - Configure federation to connect to your target clusters with `kubefedctl join`
@@ -313,7 +335,7 @@ spec:
 
     **Important Note**: The instructions in this guide refer to the namespace
     where federation is installed as `<namespace>` in command examples. The
-    upstream user guide uses `federation-system` as the name of this namespace.
+    upstream user guide uses `kube-federation-system` as the name of this namespace.
 
     ### Get the kubefedctl CLI tool
 
@@ -334,7 +356,12 @@ spec:
           --host-cluster-context mycluster \       # name of a KUBECONFIG context for the hosting cluster
           --kubefed-namespace=<namespace> \        # namespace where federation is deployed
           -v 2
-    
+     
+     Note: if you're using an openshift cluster for deploying the kubefed-operator then
+     use the following command for renaming context to consumable format.
+
+     oc config rename-context $(oc config current-context) <cluster-name>
+
     `kubefedctl join` creates `KubeFedCluster` and `Cluster` resources named
     `cluster-name` to represent the joined cluster.
 
@@ -581,6 +608,54 @@ spec:
           - create
           - update
           - patch
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - '*'
+          verbs:
+          - get
+          - watch
+          - list
+          - update
+          - create
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - get
+          - watch
+          - list
+        - apiGroups:
+          - admission.core.kubefed.k8s.io
+          resources:
+          - "*"
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - "*"
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - "*"
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
         serviceAccountName: kubefed-operator
       deployments:
       - name: kubefed-operator
@@ -599,11 +674,14 @@ spec:
               - args:
                 - --filename=$(FILE_NAME)
                 - --recursive=true
+                - --webhookfilename=$(WEBHOOK_FILE_NAME)
                 command:
                 - kubefed-operator
                 env:
                 - name: FILE_NAME
-                  value: "deploy/resources"
+                  value: "deploy/resources/controller"
+                - name: WEBHOOK_FILE_NAME
+                  value: "deploy/resources/webhook"
                 - name: WATCH_NAMESPACE
                   valueFrom:
                     fieldRef:
@@ -614,7 +692,7 @@ spec:
                       fieldPath: metadata.name
                 - name: OPERATOR_NAME
                   value: kubefed-operator
-                image: quay.io/openshift/kubefed-operator:v0.1.0-rc3
+                image: quay.io/anbhat/kfo:webhook
                 imagePullPolicy: Always
                 name: kubefed-operator
                 resources: {}
@@ -664,6 +742,54 @@ spec:
           - '*'
           verbs:
           - '*'
+        - apiGroups:
+          - admissionregistration.k8s.io
+          resources:
+          - '*'
+          verbs:
+          - get
+          - watch
+          - list
+          - update
+          - create
+        - apiGroups:
+          - route.openshift.io
+          resources:
+          - routes
+          verbs:
+          - get
+          - watch
+          - list
+        - apiGroups:
+          - admission.core.kubefed.k8s.io
+          resources:
+          - "*"
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
+        - apiGroups:
+          - authorization.k8s.io
+          resources:
+          - "*"
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
+        - apiGroups:
+          - authentication.k8s.io
+          resources:
+          - "*"
+          verbs:
+          - get
+          - watch
+          - list
+          - create
+          - update
         serviceAccountName: kubefed-operator
     strategy: deployment
   installModes:
