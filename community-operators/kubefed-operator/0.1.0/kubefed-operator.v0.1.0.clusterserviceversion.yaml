@@ -656,6 +656,15 @@ spec:
           - list
           - create
           - update
+        - apiGroups:
+          - ""
+          resources:
+          - configmaps
+          verbs:
+          - get
+          - list
+          - create
+          - update
         serviceAccountName: kubefed-operator
       deployments:
       - name: kubefed-operator
