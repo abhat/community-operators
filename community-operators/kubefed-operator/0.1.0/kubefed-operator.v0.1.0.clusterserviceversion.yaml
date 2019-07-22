@@ -748,7 +748,12 @@ spec:
         - apiGroups:
           - operator.kubefed.io
           resources:
-          - '*'
+          - 'kubefedwebhooks/finalizers'
+          - 'kubefedwebhooks/status
+          - 'kubefeds/status'
+          - 'kubefeds/finalizers'
+          - 'kubefeds'
+          - 'kubefedwebhooks'
           verbs:
           - '*'
         - apiGroups:
