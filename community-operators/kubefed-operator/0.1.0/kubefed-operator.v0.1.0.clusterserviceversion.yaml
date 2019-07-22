@@ -749,7 +749,7 @@ spec:
           - operator.kubefed.io
           resources:
           - 'kubefedwebhooks/finalizers'
-          - 'kubefedwebhooks/status
+          - 'kubefedwebhooks/status'
           - 'kubefeds/status'
           - 'kubefeds/finalizers'
           - 'kubefeds'
